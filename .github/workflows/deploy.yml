@@ -2,8 +2,10 @@ name: Deploy to Vercel (production)
 
 # Ships on every push to main. App runtime secrets live in the Vercel project
 # (not here) — the deployed functions read them at request time. This workflow
-# only needs credentials to talk to Vercel: VERCEL_TOKEN / VERCEL_ORG_ID /
-# VERCEL_PROJECT_ID, stored as GitHub repository secrets.
+# needs credentials to talk to Vercel (VERCEL_TOKEN / VERCEL_ORG_ID /
+# VERCEL_PROJECT_ID), plus TELEGRAM_BOT_TOKEN / TELEGRAM_WEBHOOK_SECRET for the
+# post-deploy webhook re-assert step — all stored as GitHub repository secrets.
+# PRODUCTION_URL is a repo *variable* (e.g. https://lab-auto-mail.vercel.app).
 
 on:
   push:
@@ -40,3 +42,14 @@ jobs:
 
       - name: Deploy prebuilt output to production
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      # Re-assert the Telegram webhook against the stable production domain on
+      # every deploy. This is a self-healing safety net: local e2e testing
+      # (npm run test-e2e) repoints the webhook at an ngrok tunnel, so if that
+      # isn't restored, the "Send as-is" button stays broken in prod until the
+      # next deploy. Uses PRODUCTION_URL (a repo *variable*, not a secret).
+      - name: Re-assert Telegram webhook to production
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: node scripts/set-webhook.mjs "${{ vars.PRODUCTION_URL }}"
