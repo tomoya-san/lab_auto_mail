@@ -101,28 +101,64 @@ vercel env add GOOGLE_CLIENT_SECRET
 
 Generate `CRON_SECRET` with `openssl rand -hex 32`.
 
-### 5. Deploy
+### 5. Deploy (automated via GitHub Actions)
 
-```bash
-vercel deploy --prod
-```
+Pushes to `main` deploy to production through `.github/workflows/deploy.yml`
+(`vercel pull → build → deploy --prebuilt --prod`). The app's runtime secrets
+live in the **Vercel project** — GitHub Secrets aren't visible at Vercel
+runtime, so the functions read them from Vercel at request time. The pipeline
+itself only needs credentials to talk to Vercel.
+
+**One-time setup:**
+
+1. Install + link (creates `.vercel/project.json` with your org/project IDs):
+
+   ```bash
+   npm i -g vercel@latest
+   vercel login
+   vercel link
+   ```
+
+2. Create a token at **Vercel → Account Settings → Tokens**.
+
+3. Load the app secrets from `.env.local` into the Vercel project (production):
+
+   ```bash
+   VERCEL_TOKEN=xxxxx npm run sync-env        # add --dry-run to preview
+   ```
+
+   This pushes every required var (Google, SMTP, Telegram, `EMAIL_RECIPIENT`,
+   `CRON_SECRET`) idempotently — re-run it whenever you rotate a secret.
+
+4. Add three **GitHub repository secrets** (Settings → Secrets and variables →
+   Actions). The org/project IDs are in `.vercel/project.json` after `vercel link`:
+
+   | Secret | Value |
+   |---|---|
+   | `VERCEL_TOKEN` | the token from step 2 |
+   | `VERCEL_ORG_ID` | `orgId` in `.vercel/project.json` |
+   | `VERCEL_PROJECT_ID` | `projectId` in `.vercel/project.json` |
+
+5. Push to `main` (or run the workflow manually from the Actions tab). The first
+   successful deploy gives you your production URL, e.g.
+   `https://lab-auto-mail.vercel.app`.
+
+> The first deploy can also be done locally with `vercel deploy --prod` if you'd
+> rather not wait for Actions — the project must be linked first.
 
 ### 6. Register the Telegram webhook
 
-After the first prod deploy, point Telegram at the webhook (one-time). Replace
-`<your-domain>` with your production origin, e.g. `lab-auto-mail.vercel.app`:
+After the first prod deploy, point Telegram at the webhook (one-time). Pass your
+production origin (no path — the script appends `/api/telegram/webhook`):
 
 ```bash
-curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"url\": \"https://<your-domain>/api/telegram/webhook\",
-    \"secret_token\": \"$TELEGRAM_WEBHOOK_SECRET\",
-    \"allowed_updates\": [\"callback_query\"]
-  }"
+npm run set-webhook -- https://lab-auto-mail.vercel.app
 ```
 
-Confirm with `curl https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo`.
+The script reads `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` from
+`.env.local`, registers the webhook with `allowed_updates: ["callback_query"]`,
+and prints `getWebhookInfo` so you can confirm it took. A webhook persists
+server-side at Telegram, so you only re-run this if the URL changes.
 
 ## Cron schedule
 
@@ -143,7 +179,15 @@ curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/morn
 
 The cron push works over plain localhost (it only calls out to Telegram). To
 test the **Send as-is** button locally, Telegram needs to reach your machine
-over HTTPS: run `ngrok http 3000` and re-run `setWebhook` against the ngrok URL.
+over HTTPS:
+
+```bash
+ngrok http 3000
+npm run set-webhook -- https://<your-ngrok-subdomain>.ngrok-free.app
+```
+
+ngrok hands out a new URL on each restart, so re-run `set-webhook` whenever the
+tunnel changes. Point it back at your prod domain when you're done testing.
 
 ## Customizing the email template
 
