@@ -10,7 +10,8 @@
     "get-refresh-token": "node --env-file=.env.local scripts/get-refresh-token.mjs",
     "test-smtp": "node --env-file=.env.local scripts/test-smtp.mjs",
     "set-webhook": "node --env-file=.env.local scripts/set-webhook.mjs",
-    "sync-env": "node --env-file=.env.local scripts/sync-env.mjs"
+    "sync-env": "node --env-file=.env.local scripts/sync-env.mjs",
+    "test-e2e": "node --env-file=.env.local scripts/test-e2e.mjs"
   },
   "dependencies": {
     "googleapis": "^171.4.0",

@@ -171,23 +171,58 @@ Change the `schedule` cron expression for your timezone (Vercel Cron uses UTC).
 npm run dev
 ```
 
-To test the cron endpoint locally:
+### Test the full loop before deploying
+
+The **Send as-is** button is the one leg you can't fake: Telegram can only call a
+public HTTPS URL, and the callback id it sends is server-issued. So a true
+end-to-end test needs an [ngrok](https://ngrok.com) tunnel that lets Telegram
+reach your local dev server. `npm run test-e2e` wires this up in one command.
+
+Open three terminals:
+
+```bash
+npm run dev          # 1. Next dev server on :3000
+ngrok http 3000      # 2. public HTTPS tunnel to it
+npm run test-e2e     # 3. drive the test
+```
+
+`test-e2e` then:
+
+1. Checks the dev server is up.
+2. Auto-detects the ngrok HTTPS URL (via ngrok's local API at `127.0.0.1:4040`).
+3. Points the Telegram webhook at `<tunnel>/api/telegram/webhook`.
+4. Triggers `GET /api/cron/morning` with the `Bearer CRON_SECRET` header, exactly
+   as Vercel Cron does — running the real Calendar → compose → Telegram path.
+5. Prints instructions to press **✅ Send as-is**.
+
+Pressing the button routes Telegram → ngrok → your local webhook handler →
+`fetchEventById` → `composeDraft` → a **real** SMTP send. Watch the `npm run dev`
+logs and your inbox to confirm.
+
+Useful flags:
+
+```bash
+npm run test-e2e -- --port 3001                        # non-default dev port
+npm run test-e2e -- --url https://abc.ngrok-free.app   # skip ngrok auto-detect
+npm run test-e2e -- --no-cron                          # only (re)point the webhook
+```
+
+> **⚠️ Restore production routing when done.** While testing, your bot's webhook
+> points at the ngrok tunnel, so production is paused (and breaks once ngrok
+> stops). Point it back at prod afterwards:
+>
+> ```bash
+> npm run set-webhook -- https://lab-auto-mail.vercel.app
+> ```
+
+### Test just the cron leg
+
+If you only want to exercise the cron push (no button), it works over plain
+localhost since it only calls out to Telegram:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/morning
 ```
-
-The cron push works over plain localhost (it only calls out to Telegram). To
-test the **Send as-is** button locally, Telegram needs to reach your machine
-over HTTPS:
-
-```bash
-ngrok http 3000
-npm run set-webhook -- https://<your-ngrok-subdomain>.ngrok-free.app
-```
-
-ngrok hands out a new URL on each restart, so re-run `set-webhook` whenever the
-tunnel changes. Point it back at your prod domain when you're done testing.
 
 ## Customizing the email template
 

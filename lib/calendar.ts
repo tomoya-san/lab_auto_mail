@@ -6,11 +6,14 @@ export type CalendarEvent = {
   id: string;
   summary: string;
   description: string;
+  location: string;
   start: string;
   end: string;
 };
 
-export async function fetchTodaysEvents(now = new Date()): Promise<CalendarEvent[]> {
+export async function fetchTodaysEvents(
+  now = new Date(),
+): Promise<CalendarEvent[]> {
   const calendar = google.calendar({ version: "v3", auth: getOAuth2Client() });
 
   const startOfDay = new Date(now);
@@ -30,12 +33,15 @@ export async function fetchTodaysEvents(now = new Date()): Promise<CalendarEvent
     id: e.id ?? "",
     summary: e.summary ?? "",
     description: e.description ?? "",
+    location: e.location ?? "",
     start: e.start?.dateTime ?? e.start?.date ?? "",
     end: e.end?.dateTime ?? e.end?.date ?? "",
   }));
 }
 
-export async function fetchEventById(eventId: string): Promise<CalendarEvent | null> {
+export async function fetchEventById(
+  eventId: string,
+): Promise<CalendarEvent | null> {
   const calendar = google.calendar({ version: "v3", auth: getOAuth2Client() });
   const res = await calendar.events.get({
     calendarId: env.google.calendarId(),
@@ -47,6 +53,7 @@ export async function fetchEventById(eventId: string): Promise<CalendarEvent | n
     id: e.id,
     summary: e.summary ?? "",
     description: e.description ?? "",
+    location: e.location ?? "",
     start: e.start?.dateTime ?? e.start?.date ?? "",
     end: e.end?.dateTime ?? e.end?.date ?? "",
   };
