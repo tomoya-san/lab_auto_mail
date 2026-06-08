@@ -3,6 +3,7 @@ import { env } from "./env";
 import type { EmailDraft } from "./compose";
 
 export const CALLBACK_PREFIX_SEND_AS_IS = "send:";
+export const CALLBACK_PREFIX_CANCEL = "cancel:";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
@@ -74,6 +75,10 @@ export async function sendReviewMessage(opts: {
         text: "✅ Send as-is",
         callback_data: `${CALLBACK_PREFIX_SEND_AS_IS}${eventId}`,
       },
+      {
+        text: "❌ Do not send",
+        callback_data: `${CALLBACK_PREFIX_CANCEL}${eventId}`,
+      },
     ],
   ];
 
@@ -105,6 +110,19 @@ export async function editMessageAsSent(opts: {
     chat_id: opts.chatId,
     message_id: opts.messageId,
     text: `✅ *Sent:* ${escapeMarkdownV2(opts.subject)}`,
+    parse_mode: "MarkdownV2",
+  });
+}
+
+export async function editMessageAsCancelled(opts: {
+  chatId: number;
+  messageId: number;
+  subject: string;
+}): Promise<void> {
+  await callTelegram("editMessageText", {
+    chat_id: opts.chatId,
+    message_id: opts.messageId,
+    text: `❌ *Not sent:* ${escapeMarkdownV2(opts.subject)}`,
     parse_mode: "MarkdownV2",
   });
 }

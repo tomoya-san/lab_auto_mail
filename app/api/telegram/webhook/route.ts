@@ -3,8 +3,10 @@ import { fetchEventById } from "@/lib/calendar";
 import { composeDraft } from "@/lib/compose";
 import { sendEmail } from "@/lib/mailer";
 import {
+  CALLBACK_PREFIX_CANCEL,
   CALLBACK_PREFIX_SEND_AS_IS,
   answerCallbackQuery,
+  editMessageAsCancelled,
   editMessageAsSent,
   sendPlainMessage,
   verifyWebhookSecret,
@@ -52,12 +54,16 @@ export async function POST(request: Request) {
 
   try {
     const data = cq.data ?? "";
-    if (!data.startsWith(CALLBACK_PREFIX_SEND_AS_IS)) {
+    const isSend = data.startsWith(CALLBACK_PREFIX_SEND_AS_IS);
+    const isCancel = data.startsWith(CALLBACK_PREFIX_CANCEL);
+    if (!isSend && !isCancel) {
       await answerCallbackQuery(cq.id);
       return NextResponse.json({ ok: true });
     }
 
-    const eventId = data.slice(CALLBACK_PREFIX_SEND_AS_IS.length);
+    const eventId = data.slice(
+      (isSend ? CALLBACK_PREFIX_SEND_AS_IS : CALLBACK_PREFIX_CANCEL).length,
+    );
     const event = await fetchEventById(eventId);
     if (!event) {
       await answerCallbackQuery(cq.id, "Event not found");
@@ -65,6 +71,19 @@ export async function POST(request: Request) {
     }
 
     const draft = composeDraft(event);
+
+    if (isCancel) {
+      await answerCallbackQuery(cq.id, "Not sent");
+      if (cq.message) {
+        await editMessageAsCancelled({
+          chatId: cq.message.chat.id,
+          messageId: cq.message.message_id,
+          subject: draft.subject,
+        }).catch(() => {});
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     await sendEmail(draft);
     await answerCallbackQuery(cq.id, "Sent");
     if (cq.message) {
